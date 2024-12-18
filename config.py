@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
+    MONGO_URI = os.getenv('MONGO_URI')
     CALENDAR_URL = 'https://caldav.icloud.com'
     CALENDAR_USERNAME = os.getenv('CALENDAR_USERNAME')
     CALENDAR_PASSWORD = os.getenv('CALENDAR_PASSWORD')

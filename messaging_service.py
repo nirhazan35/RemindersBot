@@ -2,6 +2,7 @@ import requests
 
 class MessagingService:
     def __init__(self, config):
+        # Initialize WhatsApp API credentials
         self.access_token = config.ACCESS_TOKEN
         self.phone_number_id = config.PHONE_NUMBER_ID
         self.my_phone_number = config.MY_PHONE_NUMBER
@@ -9,6 +10,7 @@ class MessagingService:
         self.reminder_body = config.REMINDER_BODY
 
     def send_confirmation_request(self, appointment_time, customer_number):
+        # Send a confirmation request
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -36,6 +38,7 @@ class MessagingService:
             print(f"Failed to send confirmation: {response.text}")
 
     def send_customer_whatsapp_reminder(self, customer_number, appointment_time):
+        # Send a WhatsApp reminder to the customer
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -52,6 +55,7 @@ class MessagingService:
             print(f"Failed to send reminder: {response.text}")
 
     def send_acknowledgement(self, customer_number, appointment_time, response):
+        # Send a WhatsApp message to the user that the reminder has been sent
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",

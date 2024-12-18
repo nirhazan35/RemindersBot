@@ -4,12 +4,14 @@ import datetime
 
 class CalendarService:
     def __init__(self, config):
+        # Set up calendar credentials
         self.calendar_url = config.CALENDAR_URL
         self.username = config.CALENDAR_USERNAME
         self.password = config.CALENDAR_PASSWORD
         self.timezone = pytz.timezone(config.TIMEZONE)
 
-    def get_tomorrow_tipul_appointments(self):
+    def get_tomorrow_appointments(self):
+        # Fetch tomorrow's appointments
         try:
             client = caldav.DAVClient(url=self.calendar_url, username=self.username, password=self.password)
             principal = client.principal()
@@ -37,6 +39,7 @@ class CalendarService:
             return []
 
     def get_tomorrow_time(self):
+        # Calculate tomorrow's start and end time
         tomorrow = datetime.date.today() + datetime.timedelta(days=1)
         tomorrow_start = self.timezone.localize(datetime.datetime.combine(tomorrow, datetime.time.min))
         tomorrow_end = self.timezone.localize(datetime.datetime.combine(tomorrow, datetime.time.max))

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from motor.motor_asyncio import AsyncIOMotorClient
 from config import Config
 from calendar_service import CalendarService
 from messaging_service import MessagingService
@@ -7,20 +8,25 @@ from reminder_bot import ReminderBot
 
 app = FastAPI()
 
+# Initialize services and DB manager
 config = Config()
+client = AsyncIOMotorClient(config.MONGO_URI)
+db = client.get_default_database()
 calendar_service = CalendarService(config)
 messaging_service = MessagingService(config)
-confirmation_manager = PendingConfirmationManager()
+confirmation_manager = PendingConfirmationManager(db)
 bot = ReminderBot(calendar_service, messaging_service, confirmation_manager)
 
 @app.get("/webhook")
 async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: int):
+    # Verify webhook URL
     if hub_mode == "subscribe" and hub_verify_token == config.VERIFY_TOKEN:
         return int(hub_challenge)
     return {"status": "Verification failed"}, 403
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
+    # Handle WhatsApp webhook events
     try:
         data = await request.json()
         entry = data.get("entry", [])[0]
@@ -38,8 +44,8 @@ async def handle_webhook(request: Request):
                 action, appointment_time = reply_id.split("$")
                 key = f"{from_number}${appointment_time}"
 
-                if confirmation_manager.has_confirmation(key):
-                    reminder = confirmation_manager.get_confirmation(key)
+                if await confirmation_manager.has_confirmation(key):
+                    reminder = await confirmation_manager.get_confirmation(key)
                     if action == "yes_confirmation":
                         messaging_service.send_customer_whatsapp_reminder(reminder['customer_number'], reminder['start_time'])
                         messaging_service.send_acknowledgement(from_number, appointment_time, action)
@@ -55,8 +61,9 @@ async def handle_webhook(request: Request):
     
 @app.post("/run-check")
 async def run_check():
+    # Run daily check on demand
     try:
-        bot.run_daily_check()
+        await bot.run_daily_check()
         return {"status": "Check completed successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
