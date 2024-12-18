@@ -13,6 +13,6 @@ class Config:
     PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
     MY_PHONE_NUMBER = os.getenv('MY_PHONE_NUMBER')
     API_VERSION = os.getenv('VERSION')
-    REMINDER_BODY = os.getenv('REMINDER_BODY')
+    REMINDER_BODY = os.getenv('REMINDER_BODY', '').replace('\\n', '\n')
     VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
     TIMEZONE = 'Asia/Jerusalem'
