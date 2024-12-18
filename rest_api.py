@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import Config
+from apscheduler.schedulers.background import BackgroundScheduler
 from calendar_service import CalendarService
 from messaging_service import MessagingService
 from pending_confirmation_manager import PendingConfirmationManager
@@ -8,7 +9,7 @@ from reminder_bot import ReminderBot
 
 app = FastAPI()
 
-# Initialize services and DB manager
+# Initialize services, DB manager and bot
 config = Config()
 client = AsyncIOMotorClient(config.MONGO_URI)
 db = client.get_default_database()
@@ -16,6 +17,15 @@ calendar_service = CalendarService(config)
 messaging_service = MessagingService(config)
 confirmation_manager = PendingConfirmationManager(db)
 bot = ReminderBot(calendar_service, messaging_service, confirmation_manager)
+
+# Initialize and start the scheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(bot.run_daily_check, "cron", hour=20)  # Runs daily at 20:00
+scheduler.start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    scheduler.shutdown()
 
 @app.get("/webhook")
 async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: int):
