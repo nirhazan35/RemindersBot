@@ -1,41 +1,28 @@
 from fastapi import FastAPI, Request
-from reminder_bot import CalendarReminderBot
-from collections import defaultdict
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from config import Config
+from calendar_service import CalendarService
+from messaging_service import MessagingService
+from pending_confirmation_manager import PendingConfirmationManager
+from reminder_bot import ReminderBot
 
 app = FastAPI()
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
-
-# Shared pending confirmation dictionary
-pending_confirmations = defaultdict(dict)
-bot = CalendarReminderBot(pending_confirmations)
-bot.run_daily_check()
-
+config = Config()
+calendar_service = CalendarService(config)
+messaging_service = MessagingService(config)
+confirmation_manager = PendingConfirmationManager()
+bot = ReminderBot(calendar_service, messaging_service, confirmation_manager)
 
 @app.get("/webhook")
 async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: int):
-    """Verify the webhook URL."""
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+    if hub_mode == "subscribe" and hub_verify_token == config.VERIFY_TOKEN:
         return int(hub_challenge)
     return {"status": "Verification failed"}, 403
 
-def verify_number(number):
-    for n in bot.pending_confirmations:
-        if number == n.split('$')[0]:
-            return True
-    return False
-
 @app.post("/webhook")
 async def handle_webhook(request: Request):
-    """Process interactive replies from WhatsApp."""
     try:
         data = await request.json()
-
         entry = data.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
         value = changes.get("value", {})
@@ -46,19 +33,30 @@ async def handle_webhook(request: Request):
             from_number = message.get("from")
             button_reply = message.get("interactive", {}).get("button_reply", {})
 
-            if button_reply and verify_number(from_number):
-                reminder = bot.pending_confirmations.pop(from_number+'$'+button_reply["id"].split('$')[1])
-                if button_reply["id"].split('$')[0] == "yes_confirmation":
-                    bot.send_whatsapp_reminder(reminder['customer_number'], reminder['start_time'])
-                    print("Reminder sent.")
-                else:
-                    print("Confirmation declined.")
-            else:
-                print("No pending confirmation for this number or no button reply received.")
+            if button_reply:
+                reply_id = button_reply.get("id", "")
+                action, appointment_time = reply_id.split("$")
+                key = f"{from_number}${appointment_time}"
 
-        return {"status": "received"}
+                if confirmation_manager.has_confirmation(key):
+                    reminder = confirmation_manager.get_confirmation(key)
+                    if action == "yes_confirmation":
+                        messaging_service.send_customer_whatsapp_reminder(reminder['customer_number'], reminder['start_time'])
+                        messaging_service.send_acknowledgement(from_number, appointment_time, action)
+                        return {"status": "Reminder sent"}
+                    else:
+                        messaging_service.send_acknowledgement(from_number, appointment_time, action)
+                        return {"status": "Confirmation declined"}
+
+        return {"status": "No action taken"}
 
     except Exception as e:
-        print(f"Error processing webhook: {e}")
         return {"status": "error", "message": str(e)}
-
+    
+@app.post("/run-check")
+async def run_check():
+    try:
+        bot.run_daily_check()
+        return {"status": "Check completed successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
