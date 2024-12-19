@@ -62,7 +62,7 @@ async def handle_webhook(request: Request):
                         messaging_service.send_acknowledgement(reminder['customer_name'], appointment_time, action)
                         return {"status": "Reminder sent"}
                     else:
-                        messaging_service.send_acknowledgement(from_number, appointment_time, action)
+                        messaging_service.send_acknowledgement(reminder['customer_name'], appointment_time, action)
                         return {"status": "Confirmation declined"}
 
         return {"status": "No action taken"}
