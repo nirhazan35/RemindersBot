@@ -57,8 +57,9 @@ async def handle_webhook(request: Request):
                 if await confirmation_manager.has_confirmation(key):
                     reminder = await confirmation_manager.get_confirmation(key)
                     if action == "yes_confirmation":
+                        print("customer name:", reminder['customer_name'])
                         messaging_service.send_customer_whatsapp_reminder(reminder['customer_number'], reminder['start_time'])
-                        messaging_service.send_acknowledgement(from_number, appointment_time, action)
+                        messaging_service.send_acknowledgement(reminder['customer_name'], appointment_time, action)
                         return {"status": "Reminder sent"}
                     else:
                         messaging_service.send_acknowledgement(from_number, appointment_time, action)

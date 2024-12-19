@@ -10,7 +10,7 @@ class PendingConfirmationManager:
         # Add or update a confirmation in MongoDB
         await self.collection.update_one(
             {"key": key}, 
-            {"$set": {"customer_number": data["customer_number"], "appointment_time": data["start_time"], "created_at": datetime.utcnow()}}, 
+            {"$set": {"customer_name": data["customer_name"], "customer_number": data["customer_number"], "appointment_time": data["start_time"], "created_at": datetime.utcnow()}}, 
             upsert=True
         )
 
@@ -19,7 +19,7 @@ class PendingConfirmationManager:
         confirmation = await self.collection.find_one({"key": key})
         if confirmation:
             await self.collection.delete_one({"key": key})
-            return {"customer_number": confirmation["customer_number"], "start_time": confirmation["appointment_time"]}
+            return {"customer_name": confirmation["customer_name"], "customer_number": confirmation["customer_number"], "start_time": confirmation["appointment_time"]}
         return None
 
     async def has_confirmation(self, key):

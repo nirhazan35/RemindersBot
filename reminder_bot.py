@@ -8,15 +8,20 @@ class ReminderBot:
     async def run_daily_check(self):
         # Run the daily check for appointments
         appointments = self.calendar_service.get_tomorrow_appointments()
-        for _, description, start_time in appointments:
+        if len(appointments) == 0:
+            self.messaging_service.send_no_appointments_message()
+            return
+        for summary, description, start_time in appointments:
             customer_number = self.extract_phone_number(description)
+            customer_name = summary.split(' ')[1]
             if customer_number:
                 key = f"{customer_number}${start_time}"
                 await self.confirmation_manager.add_confirmation(key, {
+                    'customer_name': customer_name,
                     'customer_number': customer_number,
                     'start_time': start_time
                 })
-                self.messaging_service.send_confirmation_request(start_time, customer_number)
+                self.messaging_service.send_confirmation_request(start_time, customer_name)
 
     @staticmethod
     def extract_phone_number(description):

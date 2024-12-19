@@ -22,17 +22,20 @@ class CalendarService:
 
             for calendar in calendars:
                 events = calendar.date_search(start=tomorrow_start, end=tomorrow_end)
-                for event in events:
-                    if hasattr(event, 'instance'):
-                        event_data = event.instance.vevent
-                        summary = event_data.summary.value if hasattr(event_data, 'summary') else ''
-                        description = event_data.description.value if hasattr(event_data, 'description') else ''
-                        start_time = f"{event_data.dtstart.value.astimezone(self.timezone).hour}:{event_data.dtstart.value.astimezone(self.timezone).minute:02d}"
-                    else:
-                        summary = getattr(event, 'summary', '')
-                        description = getattr(event, 'description', '')
-                    if summary.lower().startswith("טיפול") or summary.lower().startswith("tipul"):
-                        appointments.append((summary, description, start_time))
+                if events != None:
+                    for event in events:
+                        if hasattr(event, 'instance'):
+                            event_data = event.instance.vevent
+                            summary = event_data.summary.value if hasattr(event_data, 'summary') else ''
+                            description = event_data.description.value if hasattr(event_data, 'description') else ''
+                            start_time = f"{event_data.dtstart.value.astimezone(self.timezone).hour}:{event_data.dtstart.value.astimezone(self.timezone).minute:02d}"
+                        else:
+                            summary = getattr(event, 'summary', '')
+                            description = getattr(event, 'description', '')
+                        if summary.lower().startswith("טיפול") or summary.lower().startswith("tipul"):
+                            appointments.append((summary, description, start_time))
+            if len(appointments) == 0:
+                print("No appointments found for tomorrow.")
             return appointments
         except Exception as e:
             print(f"Error retrieving appointments: {e}")
