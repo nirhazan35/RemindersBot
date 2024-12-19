@@ -66,15 +66,14 @@ class MessagingService:
                 "messaging_product": "whatsapp",
                 "to": self.my_phone_number,
                 "type": "text",
-                "text": {"body": f"נשלחה תזכורת ל{customer_name} לטייפול שיתקיים בשעה {appointment_time}."},
-                #"text": {"body": f"Reminder sent to {customer_number} for the appointment at {appointment_time}."},
+                "text": {"body": f"✅ נשלחה תזכורת ל{customer_name} לטיפול שיתקיים בשעה {appointment_time}."},
             }
         else:
             payload = {
                 "messaging_product": "whatsapp",
                 "to": self.my_phone_number,
                 "type": "text",
-                "text": {"body": f"לא נשלחה תזכורת ל{customer_name} לתור בשעה {appointment_time}."},
+                "text": {"body": f"❌ לא נשלחה תזכורת ל{customer_name} לטיפול שיתקיים בשעה {appointment_time}."},
             }
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code != 200:
