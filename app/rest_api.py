@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Request
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import Config
+from app.config import Config
 from apscheduler.schedulers.background import BackgroundScheduler
-from calendar_service import CalendarService
-from messaging_service import MessagingService
-from pending_confirmation_manager import PendingConfirmationManager
-from reminder_bot import ReminderBot
+from app.calendar_service import CalendarService
+from app.messaging_service import MessagingService
+from app.pending_confirmation_manager import PendingConfirmationManager
+from app.reminder_bot import ReminderBot
 
 app = FastAPI()
 
