@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.config import Config
 from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi.responses import PlainTextResponse
 from app.calendar_service import CalendarService
 from app.messaging_service import MessagingService
 from app.pending_confirmation_manager import PendingConfirmationManager
@@ -27,12 +28,18 @@ scheduler.start()
 async def shutdown_event():
     scheduler.shutdown()
 
+
 @app.get("/webhook")
-async def verify_webhook(hub_mode: str, hub_verify_token: str, hub_challenge: int):
-    # Verify webhook URL
-    if hub_mode == "subscribe" and hub_verify_token == config.VERIFY_TOKEN:
-        return int(hub_challenge)
-    return {"status": "Verification failed"}, 403
+async def verify_webhook(request: Request):
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
+
+    if mode == "subscribe" and token == config.VERIFY_TOKEN:
+        return PlainTextResponse(content=challenge)  # Send only the challenge as plain text
+    else:
+        return {"status": "error", "message": "Invalid token or mode"}, 403
+
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
