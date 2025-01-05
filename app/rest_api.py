@@ -36,7 +36,7 @@ async def verify_webhook(request: Request):
     challenge = request.query_params.get("hub.challenge")
 
     if mode == "subscribe" and token == config.VERIFY_TOKEN:
-        return PlainTextResponse(content=challenge)  # Send only the challenge as plain text
+        return PlainTextResponse(content=challenge) 
     else:
         return {"status": "error", "message": "Invalid token or mode"}, 403
 
@@ -64,7 +64,6 @@ async def handle_webhook(request: Request):
                 if await confirmation_manager.has_confirmation(key):
                     reminder = await confirmation_manager.get_confirmation(key)
                     if action == "yes_confirmation":
-                        print("customer name:", reminder['customer_name'])
                         messaging_service.send_customer_whatsapp_reminder(reminder['customer_number'], reminder['start_time'])
                         messaging_service.send_acknowledgement(reminder['customer_name'], appointment_time, action)
                         return {"status": "Reminder sent"}
