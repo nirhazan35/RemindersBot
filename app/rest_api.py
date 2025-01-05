@@ -84,3 +84,7 @@ async def run_check():
         return {"status": "Check completed successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
