@@ -95,3 +95,20 @@ class MessagingService:
         response = requests.post(url, headers=headers, json=payload)
         if response.status_code != 200:
             print(f"Failed to send no appointments message: {response.text}")
+    
+    def test(self):
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": "972527332808",
+            "type": "text",
+            "text": {"body": "This is a test message."},
+        }
+        response = requests.post(url, headers=headers, json=payload)
+        print(response.status_code, response.text)
+
+
