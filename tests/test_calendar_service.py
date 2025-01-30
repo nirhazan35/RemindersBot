@@ -1,78 +1,131 @@
 import pytest
+import datetime
+from freezegun import freeze_time
+from unittest.mock import patch, MagicMock
 from app.calendar_service import CalendarService
-from app.config import Config
-from datetime import datetime, timedelta
+
+class MockConfig:
+    CALENDAR_URL = "http://fake-calendar-url.com"
+    CALENDAR_USERNAME = "test_user"
+    CALENDAR_PASSWORD = "test_pass"
+    TIMEZONE = "Asia/Jerusalem"
 
 @pytest.fixture
 def calendar_service():
-    config = Config()
-    return CalendarService(config)
+    """
+    A pytest fixture creating a CalendarService with mock config.
+    """
+    return CalendarService(MockConfig())
 
-
+@freeze_time("2025-01-01")
 def test_get_tomorrow_time(calendar_service):
-    # Get the start and end times for tomorrow
-    start, end = calendar_service.get_tomorrow_time()
+    """
+    Test get_tomorrow_time returns correct date range for tomorrow,
+    by freezing the system date to 2025-01-01.
+    """
+    tomorrow_start, tomorrow_end = calendar_service.get_tomorrow_time()
 
-    # Calculate tomorrow's date
-    today = datetime.now(calendar_service.timezone).date()
-    tomorrow = today + timedelta(days=1)
+    # If "today" is 2025-01-01, tomorrow should be 2025-01-02
+    assert tomorrow_start.year == 2025
+    assert tomorrow_start.month == 1
+    assert tomorrow_start.day == 2
+    assert tomorrow_start.hour == 0
+    assert tomorrow_start.minute == 0
 
-    # Assert that start and end are both on tomorrow's date
-    assert start.date() == tomorrow, f"Start date {start.date()} is not tomorrow's date {tomorrow}"
-    assert end.date() == tomorrow, f"End date {end.date()} is not tomorrow's date {tomorrow}"
-
-    # Assert that start is at midnight
-    assert start.hour == 0 and start.minute == 0 and start.second == 0, "Start time is not midnight"
-
-    # Normalize end time to remove microseconds
-    end = end.replace(microsecond=0)
-
-    # Assert that end is at the last second of the day
-    assert end.hour == 23 and end.minute == 59 and end.second == 59, "End time is not the last second of the day"
+    assert tomorrow_end.year == 2025
+    assert tomorrow_end.month == 1
+    assert tomorrow_end.day == 2
+    assert tomorrow_end.hour == 23
+    assert tomorrow_end.minute == 59
+    assert tomorrow_end.minute == 59
 
 
-def test_get_tomorrow_appointments_without_events(calendar_service, mocker):
-    # Mock the caldav.DAVClient used in calendar_service
-    mock_client = mocker.patch('app.calendar_service.caldav.DAVClient')
-    
-    # Mock the behavior of the client's methods
-    mock_client_instance = mock_client.return_value
-    mock_principal = mock_client_instance.principal.return_value
+
+@patch("app.calendar_service.caldav.DAVClient")
+def test_get_tomorrow_appointments_no_calendars(mock_dav_client, calendar_service):
+    """
+    Test when principal.calendars() returns empty list => we get empty appointments list.
+    """
+    mock_client = MagicMock()
+    mock_principal = MagicMock()
     mock_principal.calendars.return_value = []
-    
+    mock_client.principal.return_value = mock_principal
+    mock_dav_client.return_value = mock_client
+
     appointments = calendar_service.get_tomorrow_appointments()
-    
-    # Assert the expected outcome
     assert appointments == []
-    mock_client.assert_called_once()
 
-def test_get_tomorrow_appointments_with_events(calendar_service, mocker):
-    # Mock the caldav.DAVClient used in calendar_service
-    mock_client = mocker.patch('app.calendar_service.caldav.DAVClient')
-    
-    # Mock the behavior of the client's methods
-    mock_client_instance = mock_client.return_value
-    mock_principal = mock_client_instance.principal.return_value
-    mock_calendar = mocker.Mock()  # Mock a calendar object
-    
-    # Mock events returned by the calendar's date_search method
-    mock_event = mocker.Mock()
-    mock_event.instance.vevent.summary.value = "טיפול יוסי"
-    mock_event.instance.vevent.description.value = "+972501234567"
-    mock_event.instance.vevent.dtstart.value = datetime(2024, 12, 27, 15, 0, 0, tzinfo=calendar_service.timezone)
+@patch("app.calendar_service.caldav.DAVClient")
+def test_get_tomorrow_appointments_no_tipul(mock_dav_client, calendar_service):
+    """
+    If we have events, but none have summary starting with טיפול or tipul, 
+    we should get an empty list.
+    """
+    mock_client = MagicMock()
+    mock_principal = MagicMock()
+    mock_calendar = MagicMock()
 
-    mock_calendar.date_search.return_value = [mock_event]
+    # The principal returns one calendar
     mock_principal.calendars.return_value = [mock_calendar]
-    
-    # Call the method
+    mock_client.principal.return_value = mock_principal
+    mock_dav_client.return_value = mock_client
+
+    # The calendar has some events, but none have summary that starts with טי...
+    fake_event = MagicMock()
+    fake_event.instance.vevent.summary.value = "Meeting with John"
+    fake_event.instance.vevent.description.value = "Discuss project"
+    # We can skip dtstart or set a placeholder
+    fake_event.instance.vevent.dtstart.value = datetime.datetime(2025, 1, 2, 10, 0)
+
+    mock_calendar.date_search.return_value = [fake_event]
+
     appointments = calendar_service.get_tomorrow_appointments()
+    assert appointments == []
 
-    # Assert the expected outcome
-    assert len(appointments) == 1
-    assert appointments[0] == (
-        "טיפול יוסי",
-        "+972501234567",
-        "15:00",
-    )
+@patch("app.calendar_service.caldav.DAVClient")
+def test_get_tomorrow_appointments_tipul_events(mock_dav_client, calendar_service):
+    """
+    If events have summary that starts with 'טיפול' or 'tipul', 
+    we capture them in the appointments list.
+    """
+    mock_client = MagicMock()
+    mock_principal = MagicMock()
+    mock_calendar = MagicMock()
 
-    mock_client.assert_called_once()
+    mock_principal.calendars.return_value = [mock_calendar]
+    mock_client.principal.return_value = mock_principal
+    mock_dav_client.return_value = mock_client
+
+    fake_event_1 = MagicMock()
+    fake_event_1.instance.vevent.summary.value = "טיפול John"
+    fake_event_1.instance.vevent.description.value = "John's therapy session"
+    fake_event_1.instance.vevent.dtstart.value = datetime.datetime(2025, 1, 2, 9, 30)
+
+    fake_event_2 = MagicMock()
+    fake_event_2.instance.vevent.summary.value = "tipul Mary"
+    fake_event_2.instance.vevent.description.value = "Mary's appointment"
+    fake_event_2.instance.vevent.dtstart.value = datetime.datetime(2025, 1, 2, 14, 45)
+
+    # Non-matching event
+    fake_event_3 = MagicMock()
+    fake_event_3.instance.vevent.summary.value = "Meeting with Bob"
+    fake_event_3.instance.vevent.description.value = "Project discussion"
+    fake_event_3.instance.vevent.dtstart.value = datetime.datetime(2025, 1, 2, 11, 15)
+
+    mock_calendar.date_search.return_value = [fake_event_1, fake_event_2, fake_event_3]
+
+    appointments = calendar_service.get_tomorrow_appointments()
+    assert len(appointments) == 2  # Only the tipul/טיפול ones
+
+    # Check the data from the first event
+    assert appointments[0] == ("טיפול John", "John's therapy session", "9:30")
+    # Second event
+    assert appointments[1] == ("tipul Mary", "Mary's appointment", "14:45")
+
+@patch("app.calendar_service.caldav.DAVClient", side_effect=Exception("Connection error"))
+def test_get_tomorrow_appointments_exception(mock_dav_client, calendar_service):
+    """
+    If there's an exception, the method should catch it and return [].
+    """
+    appointments = calendar_service.get_tomorrow_appointments()
+    assert appointments == []
