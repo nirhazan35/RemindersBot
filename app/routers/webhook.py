@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from typing import Dict, Any
 
 router = APIRouter()
@@ -16,7 +16,11 @@ async def verify_webhook(request: Request):
     if mode == "subscribe" and token == config.VERIFY_TOKEN:
         return PlainTextResponse(content=challenge)
     else:
-        return {"status": "error", "message": "Invalid token or mode"}, 403
+        return JSONResponse(
+            status_code=403,
+            content={"status": "error", "message": "Invalid token or mode"}
+        )
+
 
 @router.post("/webhook")
 async def handle_webhook(request: Request):

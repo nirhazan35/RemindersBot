@@ -18,7 +18,7 @@ def test_run_check_success():
         response = client.post("/run-check")
         assert response.status_code == 200
         assert response.json()["status"] == "Check completed successfully"
-        # Optionally, verify we actually awaited run_daily_check
+        # verify we awaited run_daily_check
         mock_bot.run_daily_check.assert_awaited_once()
 
 def test_run_check_exception():
