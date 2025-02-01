@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call Reminder Bot
-        run: curl -X POST https://remindersbot-development.onrender.com/run-check
+        run: curl -X POST https://remindersbot.onrender.com/run-check
