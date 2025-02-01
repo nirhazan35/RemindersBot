@@ -10,46 +10,24 @@ ReminderBot is an automated reminder system that sends WhatsApp notifications to
 - **WhatsApp Integration**: Sends reminders via the WhatsApp API.
 - **User Confirmation**: Allows manual confirmation before sending messages.
 - **MongoDB Storage**: Stores pending confirmations for reliability.
-- **CI/CD Pipeline**: Automated testing via GitHub Actions.
 - **Dockerized Deployment**: The bot runs inside a Docker container and is deployed on Render.
 
 ---
 
-## Project Structure 📂🗂️📌
+## Technologies Used 🛠️📌
 
-```
-nirhazan35-remindersbot/
-├── dockerfile
-├── privacy-policy.md
-├── requirements.txt
-├── app/
-│   ├── __init__.py
-│   ├── calendar_service.py
-│   ├── config.py
-│   ├── initialization.py
-│   ├── main.py
-│   ├── pending_confirmation_manager.py
-│   ├── reminder_bot.py
-│   ├── whatsapp_messaging_service.py
-│   └── routers/
-│       ├── __init__.py
-│       ├── health.py
-│       ├── run_check.py
-│       └── webhook.py
-├── tests/
-│   ├── __init__.py
-│   ├── test_calendar_service.py
-│   ├── test_pending_confirmation_manager.py
-│   ├── test_reminder_bot.py
-│   ├── test_route_health.py
-│   ├── test_route_run_check.py
-│   ├── test_route_webhook.py
-│   └── test_whatsapp_messaging_service.py
-└── .github/
-    └── workflows/
-        ├── ci.yaml
-        └── schedule.yaml
-```
+- **Programming Language**: Python (FastAPI Framework)
+- **Libraries & Frameworks**:
+  - `fastapi` - API framework for handling HTTP requests
+  - `motor` - Async MongoDB driver
+  - `python-dotenv` - Loads environment variables
+  - `caldav` - Accesses and fetches calendar events
+  - `uvicorn` - ASGI server for running FastAPI
+  - `requests` - Sends HTTP requests (used for WhatsApp API integration)
+  - `pytest` - Unit testing framework
+- **Database**: MongoDB (for tracking pending confirmations)
+- **Automation**: GitHub Actions (for scheduled execution)
+- **Deployment**: Docker + Render
 
 ---
 
@@ -62,13 +40,7 @@ git clone https://github.com/nirhazan35/RemindersBot.git
 cd RemindersBot
 ```
 
-### 2. Install Dependencies 📦📌✅
-
-```sh
-pip install -r requirements.txt
-```
-
-### 3. Environment Variables 🔑🔧🗂️
+### 2. Environment Variables 🔑🔧🗂️
 
 Create a `.env` file with the following:
 
@@ -85,6 +57,59 @@ MONGO_URI=your_mongodb_connection_string
 ```
 
 Ensure that all variables are properly set up before running the bot.
+
+---
+
+## How to Save Events in Your Calendar 📅✍️
+
+To ensure that ReminderBot detects your appointments correctly, follow these guidelines when creating events in your calendar:
+
+1. **Event Title Format**: The event title must start with `טיפול` followed by the client's name. For example:
+
+   - `טיפול ישראל`
+   - `טיפול יוסי כהן`
+
+2. **Event Description**:
+
+   - Include the client's phone number inside the event description.
+   - Example:
+     ```
+     +972501234567
+     ```
+
+3. **Time and Date**:
+
+   - Ensure the event is scheduled for the correct day and time.
+   - The bot checks for appointments **one day in advance**.
+
+---
+
+## Running the Bot Locally or with Docker 🖥️🐳
+
+You can run the bot in two ways: **locally** (with dependencies installed) or inside a **Docker container**.
+
+### 1. Running Locally 🏗️⚙️
+
+#### **Install Dependencies**
+
+```sh
+pip install -r requirements.txt
+```
+
+#### **Start the Application**
+
+```sh
+uvicorn app.main:app --reload
+```
+
+### 2. Running with Docker 🐳
+
+#### **Build and Run the Container**
+
+```sh
+docker build -t reminderbot .
+docker run -p 5000:5000 --env-file .env reminderbot
+```
 
 ---
 
@@ -108,26 +133,9 @@ This will generate a public URL like `https://your-ngrok-url.ngrok.io`. Use this
 
 ---
 
-## CI/CD Workflow 🔄🚀🛠️
-
-### GitHub Actions Pipeline ✅⚙️📡
-
-1. **Run Tests**: On every push to `main`, the tests inside the `tests/` folder are executed using `pytest`.
-2. **Auto Deployment**: If tests pass, the bot is built using Docker and deployed to Render.
-3. **Scheduled Execution**: A GitHub Actions workflow triggers `run-check` daily to process appointments.
-
----
-
 ## Deployment (Docker + Render) 🐳🚀🌍
 
-### 1. Build and Run Locally 🏗️🖥️
-
-```sh
-docker build -t reminderbot .
-docker run -p 5000:5000 --env-file .env reminderbot
-```
-
-### 2. Deploy to Render ☁️🚀
+### Deploy to Render ☁️🚀
 
 - Connect your GitHub repo to **Render**.
 - Add environment variables in Render's dashboard.
@@ -198,3 +206,10 @@ pytest tests/
 3. Commit changes (`git commit -m "Added new feature"`).
 4. Push (`git push origin feature-branch`).
 5. Open a Pull Request.
+
+---
+
+## License 📜⚖️🔓
+
+MIT License. See `LICENSE` for details.
+
