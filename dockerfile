@@ -21,4 +21,4 @@ ENV PATH="/home/nonrootuser/.local/bin:$PATH"
 EXPOSE 8000
 
 # Default command
-CMD ["uvicorn", "app.rest_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
