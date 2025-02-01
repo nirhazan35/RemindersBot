@@ -10,9 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy your entire app
 COPY . /app
 
+# Ensure environment variables are loaded
+ENV PYTHONUNBUFFERED=1
+
 # Expose the port (if you're using 8000 in Render, for example)
 EXPOSE 8000
 
-# Start FastAPI with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-    
+# Use a shell form CMD to allow variable expansion
+CMD uvicorn app.main:app --host 0.0.0.0 --port 8000
