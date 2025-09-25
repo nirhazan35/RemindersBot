@@ -1,0 +1,58 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: app/dockerfile
+    image: reminders-backend:latest
+    environment:
+      TZ: "Asia/Jerusalem"
+      # === DB (Atlas) ===
+      MONGO_URI: "${MONGO_URI}"
+      # === WhatsApp adapter ===
+      WA_ADAPTER_URL: "http://wa-adapter:3001"
+      WA_SHARED_SECRET: "${WA_SHARED_SECRET}"
+      # === App business config ===
+      CALENDAR_USERNAME: "${CALENDAR_USERNAME}"
+      CALENDAR_PASSWORD: "${CALENDAR_PASSWORD}"
+      MY_PHONE_NUMBER: "${MY_PHONE_NUMBER}"
+      REMINDER_BODY: "${REMINDER_BODY}"
+    ports:
+      - "8000:8000"
+    depends_on:
+      wa-adapter:
+        condition: service_healthy
+    healthcheck:
+      # Assuming you already have GET /health in your FastAPI
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  wa-adapter:
+    build:
+      context: ./wa
+      dockerfile: Dockerfile
+    image: wa-adapter:latest
+    environment:
+      TZ: "Asia/Jerusalem"
+      WA_SHARED_SECRET: "${WA_SHARED_SECRET}"
+      # Let adapter forward inbound messages to your app:
+      WA_PY_WEBHOOK_URL: "http://backend:8000/webhook/wa"
+    volumes:
+      - wa-auth:/app/auth_info_baileys   # persist WA session (no re-scan)
+    # If you want to access /qr or /health from your host, keep the port mapping.
+    # If not, you can safely remove "ports" (it will still be reachable from backend).
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  wa-auth:

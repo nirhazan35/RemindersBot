@@ -1,180 +1,164 @@
+# app/whatsapp_messaging_service.py
 import logging
-import requests
-from typing import Any
+import os
+from typing import Any, Optional, Dict
+
+import httpx
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# Adapter configuration (override via env or your app config as needed)
+WA_ADAPTER_URL = os.getenv("WA_ADAPTER_URL", "http://wa-adapter:3001")
+WA_SHARED_SECRET = os.getenv("WA_SHARED_SECRET", "change_me_strong_shared_secret")
+
+
+def _to_msisdn(jid_or_number: str) -> str:
+    """
+    Normalize to a bare MSISDN (digits only, no @s.whatsapp.net).
+    """
+    if "@s.whatsapp.net" in jid_or_number:
+        jid_or_number = jid_or_number.split("@", 1)[0]
+    return "".join(ch for ch in jid_or_number if ch.isdigit())
+
+
 class WhatsappMessagingService:
     """
-    A service to interact with the WhatsApp Business API via Facebook Graph.
-    Handles sending various types of messages, such as confirmations, reminders, and notifications.
+    WhatsApp messaging service that talks to the local Baileys adapter.
+    Preserves the previous public API used by your app.
     """
 
     def __init__(self, config: Any) -> None:
         """
-        Initializes WhatsApp API credentials from config.
-
-        :param config: An object or dict containing required credentials like:
-                       - ACCESS_TOKEN
-                       - PHONE_NUMBER_ID
-                       - MY_PHONE_NUMBER
-                       - API_VERSION
-                       - REMINDER_BODY
+        :param config: object/dict with (kept from old code):
+            - MY_PHONE_NUMBER
+            - REMINDER_BODY (format string supporting {start_time})
         """
-        self.access_token = config.ACCESS_TOKEN
-        self.phone_number_id = config.PHONE_NUMBER_ID
-        self.my_phone_number = config.MY_PHONE_NUMBER
-        self.api_version = config.API_VERSION
-        self.reminder_body = config.REMINDER_BODY
+        # Keep the same fields you previously relied on:
+        self.my_phone_number: Optional[str] = getattr(config, "MY_PHONE_NUMBER", None)
+        self.reminder_body: str = getattr(
+            config,
+            "REMINDER_BODY",
+            "תזכורת: הטיפול יתקיים בשעה {start_time}.",
+        )
 
-    def send_confirmation_request(self, appointment_time: str, customer_name: str) -> None:
-        """
-        Sends a WhatsApp confirmation request to the user's own WhatsApp 
-        (self.my_phone_number). The request includes interactive buttons 
-        for 'yes' or 'no' confirmation.
+        # Adapter endpoint + auth
+        self.base_url: str = getattr(config, "WA_ADAPTER_URL", WA_ADAPTER_URL)
+        self.shared_token: str = getattr(config, "WA_SHARED_SECRET", WA_SHARED_SECRET)
 
-        :param appointment_time: The appointment time (string).
-        :param customer_name: Customer name for personalized messaging.
+        if not self.shared_token or self.shared_token == "change_me_strong_shared_secret":
+            logger.warning("WA_SHARED_SECRET is not set to a strong value.")
+
+    # ---------- Low-level HTTP helpers ----------
+
+    async def _post(self, path: str, json: Dict) -> Dict:
+        url = f"{self.base_url}{path}"
+        headers = {"X-Token": self.shared_token}
+        logger.debug("POST %s payload=%s", url, json)
+        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+            resp = await client.post(url, json=json)
+            text = resp.text
+            try:
+                resp.raise_for_status()
+                data = resp.json()
+                logger.debug("Response %s -> %s", url, data)
+                return data
+            except Exception as e:
+                logger.warning("Adapter call failed %s (%s): %s", url, resp.status_code, text)
+                raise e
+
+    async def _get(self, path: str) -> Dict:
+        url = f"{self.base_url}{path}"
+        logger.debug("GET %s", url)
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            text = resp.text
+            try:
+                resp.raise_for_status()
+                data = resp.json()
+                logger.debug("Response %s -> %s", url, data)
+                return data
+            except Exception as e:
+                logger.warning("Adapter call failed %s (%s): %s", url, resp.status_code, text)
+                raise e
+
+    # ---------- Optional utilities you may use elsewhere ----------
+
+    async def health(self) -> Dict:
+        """Check adapter readiness."""
+        return await self._get("/health")
+
+    async def get_qr(self) -> Dict:
         """
-        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
+        Get current QR if not logged in. Useful to render in an admin page.
+        Returns: {"loggedIn": bool, "qr": str|None}
+        """
+        return await self._get("/qr")
+
+    # ---------- Public API (same names as before) ----------
+
+    async def send_confirmation_request(self, appointment_time: str, customer_name: str) -> None:
+        """
+        Sends an approval prompt (YES/NO buttons) to your own WhatsApp (MY_PHONE_NUMBER).
+        """
+        if not self.my_phone_number:
+            raise ValueError("MY_PHONE_NUMBER is required to send confirmation requests.")
+
+        body_text = (
+            f"האם לשלוח הודעת תזכורת ל{customer_name} "
+            f"בשעה {appointment_time}?"
+        )
+
         payload = {
-            "messaging_product": "whatsapp",
-            "to": self.my_phone_number,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "header": {"type": "text", "text": "אישור שליחת תזכורת"},
-                "body": {
-                    "text": (
-                        f"האם תרצי לשלוח הודעת תזכורת לטיפול של {customer_name} "
-                        f"שמתקיים בשעה {appointment_time}?"
-                    )
-                },
-                "footer": {"text": "בחרי אופציה."},
-                "action": {
-                    "buttons": [
-                        {
-                            "type": "reply",
-                            "reply": {
-                                "id": f"yes_confirmation${appointment_time}",
-                                "title": "כן",
-                            },
-                        },
-                        {
-                            "type": "reply",
-                            "reply": {
-                                "id": f"no_confirmation${appointment_time}",
-                                "title": "לא",
-                            },
-                        },
-                    ]
-                },
-            },
+            "to": _to_msisdn(self.my_phone_number),
+            "header": "אישור שליחת תזכורת",
+            "body": body_text,
+            "footer": "בחר/י אופציה.",
+            "yes_id": f"yes_confirmation${appointment_time}",
+            "yes_title": "כן",
+            "no_id": f"no_confirmation${appointment_time}",
+            "no_title": "לא",
         }
 
-        logger.debug("Sending confirmation request payload: %s", payload)
-        resp = requests.post(url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.warning("Failed to send confirmation: %s", resp.text)
+        await self._post("/send/buttons", payload)
 
-    def send_customer_whatsapp_reminder(self, customer_number: str, appointment_time: str) -> None:
+    async def send_customer_whatsapp_reminder(self, customer_number: str, appointment_time: str) -> None:
         """
-        Sends a WhatsApp reminder message to the given customer number.
-
-        :param customer_number: Customer's WhatsApp phone number in the correct format.
-        :param appointment_time: The appointment time (string).
+        Sends a reminder text to the given customer number.
         """
-        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": customer_number,
-            "type": "text",
-            "text": {"body": self.reminder_body.format(start_time=appointment_time)},
-        }
+        text = self.reminder_body.format(start_time=appointment_time)
+        payload = {"to": _to_msisdn(customer_number), "text": text}
+        await self._post("/send/text", payload)
 
-        logger.debug("Sending reminder payload: %s", payload)
-        resp = requests.post(url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.warning("Failed to send reminder: %s", resp.text)
-
-    def send_acknowledgement(self, customer_name: str, appointment_time: str, user_response: str) -> None:
+    async def send_acknowledgement(self, customer_name: str, appointment_time: str, user_response: str) -> None:
         """
-        Sends an acknowledgement message to the user’s own WhatsApp (self.my_phone_number),
-        indicating whether a reminder was sent or not.
-
-        :param customer_name: Name of the customer
-        :param appointment_time: The appointment time
-        :param user_response: Either 'yes_confirmation' or something else (interpreted as 'no')
+        Sends an acknowledgement to your own WhatsApp indicating whether a reminder was sent.
         """
-        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
+        if not self.my_phone_number:
+            raise ValueError("MY_PHONE_NUMBER is required to send acknowledgements.")
 
         if user_response == "yes_confirmation":
-            text_body = f"✅ נשלחה תזכורת ל{customer_name} לטיפול שיתקיים בשעה {appointment_time}."
+            text_body = f"✅ נשלחה תזכורת ל{customer_name} לטיפול בשעה {appointment_time}."
         else:
-            text_body = f"❌ לא נשלחה תזכורת ל{customer_name} לטיפול שיתקיים בשעה {appointment_time}."
+            text_body = f"❌ לא נשלחה תזכורת ל{customer_name} לטיפול בשעה {appointment_time}."
 
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": self.my_phone_number,
-            "type": "text",
-            "text": {"body": text_body},
-        }
+        payload = {"to": _to_msisdn(self.my_phone_number), "text": text_body}
+        await self._post("/send/text", payload)
 
-        logger.debug("Sending acknowledgement payload: %s", payload)
-        resp = requests.post(url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.warning("Failed to send acknowledgement: %s", resp.text)
-
-    def send_no_appointments_message(self) -> None:
+    async def send_no_appointments_message(self) -> None:
         """
-        Sends a message to the user’s own WhatsApp indicating no appointments found for tomorrow.
+        Notifies you that no appointments were found for tomorrow.
         """
-        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": self.my_phone_number,
-            "type": "text",
-            "text": {"body": "לא נמצאו טיפולים למחר."},
-        }
+        if not self.my_phone_number:
+            raise ValueError("MY_PHONE_NUMBER is required to send notifications.")
+        payload = {"to": _to_msisdn(self.my_phone_number), "text": "לא נמצאו טיפולים למחר."}
+        await self._post("/send/text", payload)
 
-        logger.debug("Sending no appointments message payload: %s", payload)
-        resp = requests.post(url, headers=headers, json=payload)
-        if resp.status_code != 200:
-            logger.warning("Failed to send no appointments message: %s", resp.text)
-
-    def test(self) -> None:
+    async def test(self) -> None:
         """
-        Sends a test message to a hard-coded phone number for debugging.
+        Sends a simple test message to your own WhatsApp.
         """
-        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": "972527332808",
-            "type": "text",
-            "text": {"body": "This is a test message."},
-        }
-
-        logger.debug("Sending test message payload: %s", payload)
-        resp = requests.post(url, headers=headers, json=payload)
-        logger.info("Test message response: %d %s", resp.status_code, resp.text)
+        if not self.my_phone_number:
+            raise ValueError("MY_PHONE_NUMBER is required to send test messages.")
+        payload = {"to": _to_msisdn(self.my_phone_number), "text": "This is a test message."}
+        await self._post("/send/text", payload)

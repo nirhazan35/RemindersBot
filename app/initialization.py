@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from app.config import Config
+from app import config  # <-- use module-level config
 from app.calendar_service import CalendarService
 from app.whatsapp_messaging_service import WhatsappMessagingService
 from app.pending_confirmation_manager import PendingConfirmationManager
@@ -9,8 +9,12 @@ def initialize_services():
     """
     Initializes and returns all the services (config, db client, custom services, etc.).
     """
-    config = Config()  # e.g. loads environment variables
-    client = AsyncIOMotorClient(config.MONGO_URI)
+    # config is the module; pass it around as-is
+    mongo_uri = getattr(config, "MONGO_URI", None)
+    if not mongo_uri:
+        raise RuntimeError("MONGO_URI is not set")
+
+    client = AsyncIOMotorClient(mongo_uri)
     db = client.get_default_database()
 
     calendar_service = CalendarService(config)
