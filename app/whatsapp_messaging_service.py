@@ -1,4 +1,8 @@
 # app/whatsapp_messaging_service.py
+"""
+WhatsApp messaging service that talks to the local Baileys adapter.
+Handles sending reminders, confirmations, and acknowledgements.
+"""
 import logging
 import os
 from typing import Any, Optional, Dict
@@ -30,7 +34,7 @@ class WhatsappMessagingService:
 
     def __init__(self, config: Any) -> None:
         """
-        :param config: object/dict with (kept from old code):
+        :param config: object/dict with:
             - MY_PHONE_NUMBER
             - REMINDER_BODY (format string supporting {start_time})
         """
@@ -52,35 +56,49 @@ class WhatsappMessagingService:
     # ---------- Low-level HTTP helpers ----------
 
     async def _post(self, path: str, json: Dict) -> Dict:
+        """Send POST request to WhatsApp adapter."""
         url = f"{self.base_url}{path}"
         headers = {"X-Token": self.shared_token}
         logger.debug("POST %s payload=%s", url, json)
-        async with httpx.AsyncClient(timeout=20, headers=headers) as client:
-            resp = await client.post(url, json=json)
-            text = resp.text
-            try:
+        
+        try:
+            async with httpx.AsyncClient(timeout=20, headers=headers) as client:
+                resp = await client.post(url, json=json)
                 resp.raise_for_status()
                 data = resp.json()
                 logger.debug("Response %s -> %s", url, data)
                 return data
-            except Exception as e:
-                logger.warning("Adapter call failed %s (%s): %s", url, resp.status_code, text)
-                raise e
+        except httpx.HTTPStatusError as e:
+            logger.error("HTTP error %s for %s: %s", e.response.status_code, url, e.response.text)
+            raise
+        except httpx.TimeoutException:
+            logger.error("Timeout calling WhatsApp adapter: %s", url)
+            raise
+        except Exception as e:
+            logger.error("Unexpected error calling WhatsApp adapter %s: %s", url, str(e))
+            raise
 
     async def _get(self, path: str) -> Dict:
+        """Send GET request to WhatsApp adapter."""
         url = f"{self.base_url}{path}"
         logger.debug("GET %s", url)
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url)
-            text = resp.text
-            try:
+        
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url)
                 resp.raise_for_status()
                 data = resp.json()
                 logger.debug("Response %s -> %s", url, data)
                 return data
-            except Exception as e:
-                logger.warning("Adapter call failed %s (%s): %s", url, resp.status_code, text)
-                raise e
+        except httpx.HTTPStatusError as e:
+            logger.error("HTTP error %s for %s: %s", e.response.status_code, url, e.response.text)
+            raise
+        except httpx.TimeoutException:
+            logger.error("Timeout calling WhatsApp adapter: %s", url)
+            raise
+        except Exception as e:
+            logger.error("Unexpected error calling WhatsApp adapter %s: %s", url, str(e))
+            raise
 
     # ---------- Optional utilities you may use elsewhere ----------
 
@@ -99,28 +117,29 @@ class WhatsappMessagingService:
 
     async def send_confirmation_request(self, appointment_time: str, customer_name: str) -> None:
         """
-        Sends an approval prompt (YES/NO buttons) to your own WhatsApp (MY_PHONE_NUMBER).
+        Sends an approval prompt as text message to your own WhatsApp (MY_PHONE_NUMBER).
+        User can reply with 'כן' or 'לא' as simple text.
         """
         if not self.my_phone_number:
             raise ValueError("MY_PHONE_NUMBER is required to send confirmation requests.")
 
         body_text = (
-            f"האם לשלוח הודעת תזכורת ל{customer_name} "
-            f"בשעה {appointment_time}?"
+            f"🔔 *אישור שליחת תזכורת*\n\n"
+            f"האם לשלוח הודעת תזכורת ל*{customer_name}* "
+            f"בשעה *{appointment_time}*?\n\n"
+            f"💡 השב/י:\n"
+            f"• *כן* - לשליחת התזכורת\n"
+            f"• *לא* - לביטול השליחה\n\n"
+            f"🕐 זמן טיפול: {appointment_time}\n"
+            f"👤 לקוח: {customer_name}"
         )
 
         payload = {
             "to": _to_msisdn(self.my_phone_number),
-            "header": "אישור שליחת תזכורת",
-            "body": body_text,
-            "footer": "בחר/י אופציה.",
-            "yes_id": f"yes_confirmation${appointment_time}",
-            "yes_title": "כן",
-            "no_id": f"no_confirmation${appointment_time}",
-            "no_title": "לא",
+            "text": body_text
         }
 
-        await self._post("/send/buttons", payload)
+        await self._post("/send/text", payload)
 
     async def send_customer_whatsapp_reminder(self, customer_number: str, appointment_time: str) -> None:
         """
@@ -133,14 +152,21 @@ class WhatsappMessagingService:
     async def send_acknowledgement(self, customer_name: str, appointment_time: str, user_response: str) -> None:
         """
         Sends an acknowledgement to your own WhatsApp indicating whether a reminder was sent.
+        Can also be used to send custom messages by passing text in user_response.
         """
         if not self.my_phone_number:
             raise ValueError("MY_PHONE_NUMBER is required to send acknowledgements.")
 
-        if user_response == "yes_confirmation":
-            text_body = f"✅ נשלחה תזכורת ל{customer_name} לטיפול בשעה {appointment_time}."
+        # Handle custom messages (when customer_name is empty)
+        if not customer_name and not appointment_time:
+            text_body = user_response
+        elif user_response == "yes_confirmation":
+            text_body = f"✅ נשלחה תזכורת ל*{customer_name}* לטיפול בשעה *{appointment_time}*."
+        elif user_response == "no_confirmation":
+            text_body = f"❌ לא נשלחה תזכורת ל*{customer_name}* לטיפול בשעה *{appointment_time}*."
         else:
-            text_body = f"❌ לא נשלחה תזכורת ל{customer_name} לטיפול בשעה {appointment_time}."
+            # For other custom messages
+            text_body = user_response
 
         payload = {"to": _to_msisdn(self.my_phone_number), "text": text_body}
         await self._post("/send/text", payload)

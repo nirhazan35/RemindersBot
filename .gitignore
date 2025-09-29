@@ -6,3 +6,7 @@ __pycache__/
 .pytest_cache
 node_modules/
 wa/auth_info_baileys/
+.cursor
+.cursor/
+*.mdc
+*.md
