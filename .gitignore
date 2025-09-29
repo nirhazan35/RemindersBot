@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 .DS_Store
 .pytest_cache
+node_modules/
+wa/auth_info_baileys/
+.cursor
+.cursor/
+*.mdc
+*.md

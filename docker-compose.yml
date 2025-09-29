@@ -1,0 +1,53 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: app/dockerfile
+    image: reminders-backend:latest
+    environment:
+      TZ: "Asia/Jerusalem"
+      MONGO_URI: "${MONGO_URI}"
+      WA_ADAPTER_URL: "http://wa-adapter:3001"
+      WA_SHARED_SECRET: "${WA_SHARED_SECRET}"
+      CALENDAR_USERNAME: "${CALENDAR_USERNAME}"
+      CALENDAR_PASSWORD: "${CALENDAR_PASSWORD}"
+      MY_PHONE_NUMBER: "${MY_PHONE_NUMBER}"
+      REMINDER_BODY: "${REMINDER_BODY}"
+    ports:
+      - "8000:8000"
+    depends_on:
+      wa-adapter:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request, sys\ntry:\n  with urllib.request.urlopen('http://localhost:8000/health', timeout=5) as r:\n    sys.exit(0 if r.status==200 else 1)\nexcept Exception:\n  sys.exit(1)\nPY"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  wa-adapter:
+    build:
+      context: ./wa
+      dockerfile: Dockerfile
+    image: wa-adapter:latest
+    environment:
+      TZ: "Asia/Jerusalem"
+      WA_SHARED_SECRET: "${WA_SHARED_SECRET}"
+      WA_PY_WEBHOOK_URL: "http://backend:8000/webhook/wa"
+    volumes:
+    - type: volume
+      source: wa-auth
+      target: /app/auth_info_baileys
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  wa-auth:

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.coverage*
+dist/
+build/
+
+# Envs & secrets
+.env
+.env.*
+venv/
+.venv/
+
+# Git/OS/editor
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node leftovers
+node_modules/
+npm-debug.log
+
+.cursor
+.cursor/
+*.mdc
