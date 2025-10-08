@@ -1,4 +1,17 @@
 services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1000", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -46,6 +59,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+  dispatcher:
+    build:
+      context: ./dispatcher
+      dockerfile: Dockerfile
+    image: dispatcher:latest
+    environment:
+      TZ: "Asia/Jerusalem"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
+      MONGO_URI: "${MONGO_URI}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis, os; r=redis.from_url(os.getenv('REDIS_URL')); r.ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
       start_period: 10s
     restart: unless-stopped
 

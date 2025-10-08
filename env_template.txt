@@ -8,12 +8,7 @@ MONGO_URI=mongodb://admin:password123@localhost:27017/reminders_db?authSource=ad
 CALENDAR_USERNAME=your_icloud_email@icloud.com
 CALENDAR_PASSWORD=your_app_specific_password
 
-# WhatsApp API Configuration
-# Get these from your Meta WhatsApp Business API setup
-ACCESS_TOKEN=your_whatsapp_access_token
-PHONE_NUMBER_ID=your_phone_number_id
 MY_PHONE_NUMBER=your_phone_number
-VERSION=v21.0
 
 # Bot Configuration
 # Customize your reminder message template
@@ -26,3 +21,20 @@ VERIFY_TOKEN=your_webhook_verify_token
 # For Docker: http://wa-adapter:3001, for local: http://localhost:3001
 WA_ADAPTER_URL=http://localhost:3001
 WA_SHARED_SECRET=your_long_random_secret_key_here_change_this_in_production
+
+# Redis Configuration (External Redis Service)
+# Use your external Redis connection string
+REDIS_URL=redis://your-redis-host:6379/0 #For localhost
+
+# Logging Configuration
+# Available levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_LEVEL=INFO
+
+# Dispatcher settings
+STREAM_OUTGOING=stream:outgoing
+ZSET_SCHEDULED=zset:scheduled
+HASH_JOB_PREFIX=hash:job:
+CONSUMER_GROUP=dispatcher-group
+CONSUMER_NAME=dispatcher-consumer
+DISPATCHER_POLL_INTERVAL=1
+REDIS_URL=redis://redis:6379/0
